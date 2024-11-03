@@ -1,0 +1,411 @@
+-- Core services
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+local mouse = localPlayer:GetMouse()
+
+-- Chat message request
+local sayMessageRequest = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents"):FindFirstChild("SayMessageRequest")
+
+-- Variables for teleportation and player tracking
+local playerCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local playerHumanoidRootPart = playerCharacter:WaitForChild("HumanoidRootPart")
+local targetPlayer = nil
+local followConnection = nil
+local forwardDistance = 0
+local direction = 1
+local animationTrack = nil
+local spectatingPlayer = nil
+local spectateConnection = nil
+
+-- Function to send chat messages
+local function sendChatMessage(message)
+    if sayMessageRequest then
+        sayMessageRequest:FireServer(message, "All")
+    else
+        warn("SayMessageRequest not found!")
+    end
+end
+
+-- Informing users of available commands
+wait(0.021)
+sendChatMessage("Moderation panel v0.01")
+wait(0.0555)
+print("Commands: !benx, !unbenx, !generate cash, !dropcash, !cashinfo, !R6, !R15, !cashrain, !spec, !unspec, !mask, !armor")
+
+-- Function to format cash values
+local function formatCash(value)
+    if value >= 1e6 then
+        return string.format("%.1fM", value / 1e6)  -- Millions
+    elseif value >= 1e3 then
+        return string.format("%.0fK", value / 1e3)  -- Thousands
+    else
+        return tostring(value)  -- Less than 1000
+    end
+end
+
+-- Function to follow a target player
+local function followTarget(target)
+    if followConnection then
+        followConnection:Disconnect()
+        followConnection = nil
+    end
+
+    followConnection = RunService.Heartbeat:Connect(function()
+        if target and target.Character then
+            local targetHead = target.Character:FindFirstChild("Head")
+            if targetHead then
+                local targetCFrame = targetHead.CFrame
+                forwardDistance = forwardDistance + (direction * 0.1)
+
+                if forwardDistance > 4.5 then
+                    direction = -1
+                elseif forwardDistance < 0 then
+                    direction = 1
+                end
+
+                local offsetPosition = targetCFrame.Position + (targetCFrame.LookVector * forwardDistance)
+                local newPosition = offsetPosition + Vector3.new(0, -1.5, 0)
+
+                playerHumanoidRootPart.CFrame = CFrame.new(newPosition, newPosition + targetCFrame.LookVector)
+            end
+        end
+    end)
+end
+
+-- Function to teleport the player to a position
+local function Teleport(position)
+    local humanoid = playerCharacter:FindFirstChildOfClass("Humanoid")
+    local rootPart = playerHumanoidRootPart
+
+    if humanoid and rootPart then
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+
+        rootPart.CFrame = position
+
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+    end
+end
+
+-- Function to get the player's root part
+local function GetRoot(plr)
+    if plr.Character then
+        return plr.Character:FindFirstChild("HumanoidRootPart")
+    end
+end
+--
+--
+--
+--
+--
+--
+--
+
+-- Function to buy the surgeon mask once
+local function BuySurgeonMask()
+    local HumanoidRootPart = playerHumanoidRootPart
+    if not HumanoidRootPart then
+        warn("HumanoidRootPart not found.")
+        return
+    end
+
+    local originalPosition = HumanoidRootPart.CFrame
+
+    local maskModel = Workspace:FindFirstChild("Ignored")
+        and Workspace.Ignored:FindFirstChild("Shop")
+        and Workspace.Ignored.Shop:FindFirstChild("[Surgeon Mask] - $27")
+
+    if maskModel and maskModel:FindFirstChild("ClickDetector") then
+        local targetCFrame = maskModel:GetModelCFrame() * CFrame.new(0, 3, 0)
+        Teleport(targetCFrame)
+
+        task.wait(0.2)
+        fireclickdetector(maskModel.ClickDetector)
+        task.wait(0.6)
+
+        Teleport(originalPosition)
+    else
+        warn("Could not find '[Surgeon Mask] - $27' or its ClickDetector in Workspace.Ignored.Shop")
+    end
+end
+
+--
+--
+--
+--
+--
+--
+--
+--
+
+
+
+
+-- Armor function
+local function BuyArmor()
+    local HumanoidRootPart = playerHumanoidRootPart
+    if not HumanoidRootPart then
+        warn("HumanoidRootPart not found.")
+        return
+    end
+
+    local originalPosition = HumanoidRootPart.CFrame
+
+    local maskModel = Workspace:FindFirstChild("Ignored")
+        and Workspace.Ignored:FindFirstChild("Shop")
+        and Workspace.Ignored.Shop:FindFirstChild("[High-Medium Armor] - $2440")
+
+    if maskModel and maskModel:FindFirstChild("ClickDetector") then
+        local targetCFrame = maskModel:GetModelCFrame() * CFrame.new(0, 3, 0)
+        Teleport(targetCFrame)
+
+        task.wait(0.2)
+        fireclickdetector(maskModel.ClickDetector)
+        task.wait(0.6)
+
+        Teleport(originalPosition)
+    else
+        warn("Could not find '[High-Medium Armor] - $2440' or its ClickDetector in Workspace.Ignored.Shop")
+    end
+end
+
+
+
+
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+
+
+-- Player chatting command functions
+local function onPlayerChattedCashInfo(message)
+    if string.sub(message, 1, 9) == "!cashinfo" then
+        local targetName = string.sub(message, 11)
+        targetPlayer = nil
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == targetName or player.DisplayName == targetName then
+                targetPlayer = player
+                break
+            end
+        end
+
+        if targetPlayer then
+            local cashValue = targetPlayer:FindFirstChild("DataFolder"):FindFirstChild("Currency").Value
+            local formattedCash = formatCash(cashValue)
+            sendChatMessage(targetPlayer.DisplayName .. " has " .. formattedCash .. " cash.")
+        else
+            sendChatMessage("Player not found with the name or display name: " .. targetName)
+        end
+    end
+end
+
+
+--
+local function onPlayerChattedBenx(message)
+    if string.sub(message, 1, 5) == "!benx" then
+        local targetName = string.sub(message, 7)
+        targetPlayer = nil
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == targetName or player.DisplayName == targetName then
+                targetPlayer = player
+                break
+            end
+        end
+
+        if targetPlayer then
+            followTarget(targetPlayer)
+            wait(0.021)
+
+            local pointAnimationId = "696096087"
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local pointAnimation = Instance.new("Animation")
+                pointAnimation.AnimationId = "rbxassetid://" .. pointAnimationId
+                animationTrack = humanoid:LoadAnimation(pointAnimation)
+
+                if animationTrack then
+                    animationTrack:Play()
+                else
+                    warn("Failed to load animation track.")
+                end
+            else
+                warn("Humanoid not found in the character.")
+            end
+        else
+            print("Player not found with the name or display name: " .. targetName)
+        end
+    end
+end
+
+local function onPlayerChattedUnbenx(message)
+    if string.sub(message, 1, 7) == "!unbenx" then
+        print("Unbenx command received.")
+        targetPlayer = nil
+        wait(0.21)
+
+        if animationTrack then
+            animationTrack:Stop()
+            animationTrack = nil
+            print("Stopped the animation.")
+        end
+
+        if followConnection then
+            followConnection:Disconnect()
+            followConnection = nil
+            print("Stopped following the player.")
+        end
+
+        print("Stopped benx.")
+    end
+end
+
+local function onPlayerChattedcashrain(message)
+    if string.sub(message, 1, 9) == "!cashrain" then
+        print("cashrain command received.")
+        local player = game.Players.LocalPlayer
+
+        local function simulateLeftClick()
+            VirtualUser:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            VirtualUser:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            wait(2)
+            game.Players.LocalPlayer.Character.Humanoid.HipHeight = 2
+        end
+
+        local moneyGun = player.Backpack:FindFirstChild("[Money Gun]")
+
+        if moneyGun then
+            player.Character:FindFirstChildOfClass("Humanoid"):EquipTool(moneyGun)
+            print("Money Gun has been equipped!")
+            game.Players.LocalPlayer.Character.Humanoid.HipHeight = 20
+            wait(0.21)
+            simulateLeftClick()
+        else
+            print("GO BUY MONEY GUN INSIDE THE CASINO!")
+        end
+    end
+end
+
+local function onPlayerChattedCash(message)
+    if string.sub(message, 1, 15) == "!generate cash" then
+        print("Generate cash command received.")
+        game.ReplicatedStorage.MainEvent:FireServer("DropMoney", 10000)
+    end
+end
+
+local function onPlayerChattedDropCash(message)
+    if string.sub(message, 1, 9) == "!dropcash" then
+        local targetName = string.sub(message, 11)
+        targetPlayer = nil
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == targetName or player.DisplayName == targetName then
+                targetPlayer = player
+                break
+            end
+        end
+
+        if targetPlayer then
+            local targetRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRootPart then
+                local cashDropPosition = targetRootPart.Position + Vector3.new(0, 10, 0)
+                game.ReplicatedStorage.MainEvent:FireServer("DropMoney", 10000, cashDropPosition)
+                sendChatMessage("Dropped cash on " .. targetPlayer.DisplayName)
+            else
+                sendChatMessage("Target player is not in the game.")
+            end
+        else
+            sendChatMessage("Player not found with the name or display name: " .. targetName)
+        end
+    end
+end
+
+local function onPlayerChattedSpectate(message)
+    if string.sub(message, 1, 5) == "!spec" then
+        local targetName = string.sub(message, 7)
+        targetPlayer = nil
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == targetName or player.DisplayName == targetName then
+                targetPlayer = player
+                break
+            end
+        end
+
+        if targetPlayer then
+            spectatingPlayer = targetPlayer
+            spectateConnection = RunService.RenderStepped:Connect(function()
+                if spectatingPlayer and spectatingPlayer.Character then
+                    local targetRootPart = spectatingPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if targetRootPart then
+                        local cam = workspace.CurrentCamera
+                        cam.CFrame = CFrame.new(targetRootPart.Position + Vector3.new(0, 5, 10), targetRootPart.Position)
+                    end
+                end
+            end)
+            sendChatMessage("Now spectating " .. targetPlayer.DisplayName)
+        else
+            sendChatMessage("Player not found with the name or display name: " .. targetName)
+        end
+    end
+end
+
+local function onPlayerChattedUnspectate(message)
+    if string.sub(message, 1, 8) == "!unspec" then
+        if spectateConnection then
+            spectateConnection:Disconnect()
+            spectateConnection = nil
+            sendChatMessage("Stopped spectating.")
+        end
+    end
+end
+
+
+
+local function onPlayerChattedMask(message)
+    if string.sub(message, 1, 5) == "!mask" then
+        BuySurgeonMask()
+    end
+end
+
+
+local function onPlayerChattedArmor(message)
+    if string.sub(message, 1, 6) == "!armor" then
+        BuyArmor()
+    end
+end
+
+-- Connecting to player chats
+localPlayer.Chatted:Connect(onPlayerChattedBenx)
+localPlayer.Chatted:Connect(onPlayerChattedUnbenx)
+localPlayer.Chatted:Connect(onPlayerChattedcashrain)
+localPlayer.Chatted:Connect(onPlayerChattedCash)
+localPlayer.Chatted:Connect(onPlayerChattedDropCash)
+localPlayer.Chatted:Connect(onPlayerChattedCashInfo)
+localPlayer.Chatted:Connect(onPlayerChattedSpectate)
+localPlayer.Chatted:Connect(onPlayerChattedUnspectate)
+localPlayer.Chatted:Connect(onPlayerChattedMask)
+localPlayer.Chatted:Connect(onPlayerChattedArmor)
+
+
+
